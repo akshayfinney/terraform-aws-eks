@@ -1,8 +1,11 @@
 ## This script defines the Terraform deploy for an AWS EKS cluster. Specifically four Jenkins cluster. 
 # The main.tf file contains the provider script, access key, secret key and networking. 
+# Additionally, this is the script that you want to look at to identify any networking issues with the master cluster 
 provider "aws" {
-    access_key = "AKIAVLIXMP4BXH4CGL4I"
-    secret_key = "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"
+    # Change as needed
+    access_key = "{$ACCESS_KEY}" 
+    # Change as needed 
+    secret_key = "{$SECRET_KEY}"
     region = "us-east-1"
 }
 
@@ -27,8 +30,6 @@ resource "aws_vpc" "jenkins" {
 resource "aws_subnet" "jenkins" {
     #we want atleast a min of 2. scale up or down as needed 
     count = 2
-    # Define the AZ where we want to place the cluster 
-    availability_zone = data.aws_availability_zones.available.names[count.index]
     # Env var to obtain the cidr range for vpc 
     cidr_block = "10.0.${count.index}.0/24"
     # Auto get vpc ID 
@@ -72,6 +73,38 @@ resource "aws_route_table_association" "jenkins" {
     route_table_id = "${aws_route_table.jenkins.id}"
 }
 
+#adding security group
+# Security group to control ingress/egress points to and from the master cluster
+# NOTE: This is for the master cluster only 
+resource "aws_security_group" "jenkins" {
+    name = "jenkins-eks"
+    description = " Cluster commmunication with worker nodes"
+    vpc_id = "${aws_vpc.jenkins.id}"
+  
+# Define egress point
+# Change cidr as needed
+    egress {
+        from_port = 0
+        to_port = 0
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    tags = {
+        name = "jenkins-eks"
+    }
+}
+
+## Adding i/b rule for access through VPN 
+# can be enabled once we identify which solution we want to use
+resource "aws_security_group_rule" "jenkins-ingress-vpn" {
+    description = "Allow access to cluster via VPN access"
+    cidr_blocks = ["0.0.0.0/0"]
+    from_port = 0 
+    to_port = [443,80,8080,22]
+    protocol = "tcp"
+    security_group_id = "${aws_security_group.jenkins.id}"
+    type = "ingress" 
+}
 
 
 
